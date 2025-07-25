@@ -54,6 +54,13 @@ export type TRefs = {
     areas: Set<Element>
 };
 
+export type TKeys = {
+    item: string,
+    scope: string,
+    target: string,
+    areas: Set<string>
+};
+
 // string utils
 
 const space = (...params: string[]) => params.join(' ');
@@ -67,8 +74,6 @@ const Y = PREFIX + '-y';
 const DUR = PREFIX + '-dur';
 const DEL = PREFIX + '-del';
 const FUNC = PREFIX + '-func';
-const ZINDEX = PREFIX + '-zi';
-const OPACITY = PREFIX + '-o';
 const ZERO = '0px';
 const MOUSE = 'mouse';
 const MOVE = 'move';
@@ -151,11 +156,14 @@ export const EVENT_TYPE = {
 
 export type TEventType = typeof EVENT_TYPE[keyof typeof EVENT_TYPE];
 
-const dispatch = (element: TDnDTarget, detail: {
+export type TEventDetail = {
     type: TEventType;
     refs: TRefs;
+    keys: TKeys;
     event: MouseEvent | TouchEvent;
-}) => element?.dispatchEvent(new CustomEvent(EVENT_NAME, {
+};
+
+const dispatch = (element: TDnDTarget, detail: TEventDetail) => element?.dispatchEvent(new CustomEvent(EVENT_NAME, {
     bubbles: true,
     detail
 }));
@@ -203,6 +211,13 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
         areas: new Set()
     };
 
+    const keys: TKeys = {
+        item: '',
+        scope: '',
+        target: '',
+        areas: new Set()
+    };
+
     let scopeRect: DOMRect | null = null;
     
     let x: {
@@ -237,6 +252,10 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
         refs.target = null;
         refs.scope = null;
         refs.areas = new Set();
+        keys.item = '';
+        keys.target = '';
+        keys.scope = '';
+        keys.areas = new Set();
         attrs.axis = null;
         attrs.dist = null;
         scopeRect = null;
@@ -272,19 +291,23 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
         event[PREV_DEF]();
         if (x && y && attrs.dist && (Math.abs(x.ini - eventX) < attrs.dist) && (Math.abs(y.ini - eventY) < attrs.dist)) return;
 
-        const nextTarget = getTargetByXY(eventX, eventY);
+        const targetByXY = getTargetByXY(eventX, eventY);
+        const nextTarget = refs.areas.has(targetByXY as Element) ? targetByXY : null;
         if (nextTarget !== refs.target) {
             removeActive([refs.target]);
             dispatch(refs.target, {
                 type: EVENT_TYPE.DPL,
                 refs,
+                keys,
                 event
             });
             if (nextTarget && refs.areas.has(nextTarget)) setActive([nextTarget]);
             refs.target = nextTarget;
+            keys.target = refs.target?.getAttribute(ATTRS.target) || '';
             dispatch(refs.target, {
                 type: EVENT_TYPE.DPE,
                 refs,
+                keys,
                 event
             });
         }
@@ -306,6 +329,7 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
         dispatch(refs.item, {
             type: EVENT_TYPE.DG,
             refs,
+            keys,
             event
         });
     }
@@ -321,17 +345,20 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
             dispatch(refs.target, {
                 type: EVENT_TYPE.DP,
                 refs,
+                keys,
                 event
             });
             dispatch(refs.target, {
                 type: EVENT_TYPE.DPL,
                 refs,
+                keys,
                 event
             });
         }
         dispatch(refs.item, {
             type: EVENT_TYPE.DGE,
             refs,
+            keys,
             event
         });
         reset(event);
@@ -342,7 +369,7 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
      * @param event
      */
     const onDragStart = (event: MouseEvent | TouchEvent) => {
-        if (event.target !== trigger) return;
+        if (!event.target || !trigger.contains(event.target as Node)) return;
         // start position
         let startX
         let startY;
@@ -360,8 +387,11 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
         refs.item = resolveItem();
         refs.scope = resolveScope();
         refs.areas = resolveAreas();
+        keys.item = refs.item?.getAttribute(ATTRS.item) || '';
+        keys.scope = refs.scope?.getAttribute(ATTRS.scope) || '';
+        keys.areas = new Set(refs.areas?.keys().map(area => area.getAttribute(ATTRS.target) || ''));
 
-        if (!refs.areas?.size || !refs.item) return;
+        if (!refs.item) return;
         event[PREV_DEF]?.();
         event[STOP_PROP]();
         scopeRect = refs.scope[GET_RECT]();

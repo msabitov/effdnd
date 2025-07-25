@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<h1 align="center">EffDnD</h1>
+<h1 align="center">EffDND</h1>
 
 <div align="center">
 
@@ -27,6 +27,7 @@ EffDnD is a self-confident Drag and Drop library based only on the browser APIs.
 
 -   [Docs](http://effdnd.surge.sh/) in development
 -   [Repository](https://gitverse.ru/msabitov/effdnd)
+-   [React example](https://stackblitz.com/edit/effdnd-react-vitejs?file=src%2FApp.tsx)
 
 ## Installation
 
@@ -76,7 +77,7 @@ export const Component = () => {
       }, ref.current);
       // and you can unobserve
       return () => unobserve();
-    })
+    }, []);
     // just apply ready attrs - and magic happen
     // don't forget to use `<effdnd-trigger>` inside items
     return <div {...scopeAttrs}>
