@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://effdnd.surge.sh">
-    <img alt="effdnd" src="https://effdnd.surge.sh/logo.svg" height="256px" />
+    <img alt="effdnd" src="https://effnd.tech/effdnd_logo.svg" height="256px" />
   </a>
 </p>
 
@@ -25,9 +25,14 @@ EffDnD is a self-confident Drag and Drop library based only on the browser APIs.
 
 ## Links
 
--   [Docs](http://effdnd.surge.sh/) in development
+-   [Docs](https://effnd.tech/dnd/)
 -   [Repository](https://gitverse.ru/msabitov/effdnd)
--   [React example](https://stackblitz.com/edit/effdnd-react-vitejs?file=src%2FApp.tsx)
+-   [Github mirror](https://github.com/msabitov/effdnd)
+
+## Examples
+
+-   [React](https://stackblitz.com/edit/effdnd-react-vitejs?file=src%2FApp.tsx)
+-   [Svelte](https://stackblitz.com/edit/effdnd-svelte-vitejs?file=src%2FApp.svelte)
 
 ## Installation
 

@@ -1,6 +1,6 @@
 {
   "name": "effdnd",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Self-confident Drag and Drop",
   "type": "module",
   "scripts": {
@@ -46,5 +46,5 @@
     "type": "git",
     "url": "https://gitverse.ru/msabitov/effdnd"
   },
-  "homepage": "https://effdnd.surge.sh"
+  "homepage": "https://effnd.tech/dnd/"
 }

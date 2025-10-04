@@ -111,6 +111,7 @@ const REMOVE_ATTR = REMOVE + ATTR as 'removeAttribute';
 const PROPERTY = 'Property';
 const GET_PROP = GET + PROPERTY + 'Value' as 'getPropertyValue';
 const SET_PROP = SET + PROPERTY as 'setProperty';
+const PX = 'px';
 
 /**
  * DnD attributes
@@ -163,12 +164,18 @@ export type TEventDetail = {
     event: MouseEvent | TouchEvent;
 };
 
+interface TDnDEvent extends CustomEvent {
+    detail: TEventDetail;
+}
+
+export type TDnDCallback = (event: TDnDEvent) => void;
+
 const dispatch = (element: TDnDTarget, detail: TEventDetail) => element?.dispatchEvent(new CustomEvent(EVENT_NAME, {
     bubbles: true,
     detail
 }));
-const unobserve = (element: HTMLElement, callback: EventListenerOrEventListenerObject) => element[REM_EL](EVENT_NAME, callback);
-const observe = (element: HTMLElement, callback: EventListenerOrEventListenerObject) => element[ADD_EL](EVENT_NAME, callback);
+const unobserve = (element: HTMLElement, callback: TDnDCallback) => element[REM_EL](EVENT_NAME, callback as unknown as EventListenerOrEventListenerObject);
+const observe = (element: HTMLElement, callback: TDnDCallback) => element[ADD_EL](EVENT_NAME, callback as unknown as EventListenerOrEventListenerObject);
 
 // attribute handlers
 const setActive = (elements: TDnDTarget[]) => elements?.forEach((e) => e?.[SET_ATTR](ATTRS.active, ''));
@@ -177,8 +184,8 @@ const setPassive = (elements: TDnDTarget[] | Element[]) => elements?.forEach((e)
 const removePassive  = (elements: TDnDTarget[] | Element[]) => elements?.forEach((e) => e?.[REMOVE_ATTR](ATTRS.passive));
 
 // custom property handlers
-const setX = (element: HTMLElement, val: number) => element?.[ST][SET_PROP](X, val + 'px');
-const setY = (element: HTMLElement, val: number) => element?.[ST][SET_PROP](Y, val + 'px');
+const setX = (element: HTMLElement, val: number) => element?.[ST][SET_PROP](X, val + PX);
+const setY = (element: HTMLElement, val: number) => element?.[ST][SET_PROP](Y, val + PX);
 
 // css handlers
 const varExp = (val: string, rep: string | number) => `var(${val}, ${rep})`;
@@ -316,13 +323,10 @@ const subscribe = (trigger: HTMLElement & {dndItem: HTMLElement; dndScope: HTMLE
         let yval = 0;
         if (attrs.axis !== 'x' && y && y.min !== y.max) yval = Math.max(y.min, Math.min(y.off + eventY - y.ini, y.max));
         if (attrs.axis !== 'y' && x && x.min !== x.max) xval = Math.max(x.min, Math.min(x.off + eventX - x.ini, x.max));
-        
+
         if (scopeRect) {
-            if (scopeRect.left <= eventX && scopeRect?.right >= eventX && scopeRect.top <= eventY && scopeRect?.bottom >= eventY) {
-                removeActive([refs.scope]);
-            } else {
-                setActive([refs.scope]);
-            }
+            if (scopeRect.left <= eventX && scopeRect?.right >= eventX && scopeRect.top <= eventY && scopeRect?.bottom >= eventY) removeActive([refs.scope]);
+            else setActive([refs.scope]);
         }
         setX(refs.item, xval);
         setY(refs.item, yval);
@@ -486,16 +490,16 @@ export type TUseDnD = {
     }>, css?: TDynamicAttrs): {
         /**
          * Observe DnD events
-         * @param element - HTML element
          * @param callback - event handler
+         * @param element - HTML element
          */
-        observe: (callback: EventListenerOrEventListenerObject, element?: HTMLElement) => () => void;
+        observe: (callback: TDnDCallback, element?: HTMLElement) => () => void;
         /**
          * Unobserve DnD events
-         * @param element - HTML element
          * @param callback - event handler
+         * @param element - HTML element
          */
-        unobserve: (element: HTMLElement, callback: EventListenerOrEventListenerObject) => void;
+        unobserve: (callback: TDnDCallback, element?: HTMLElement) => void;
         /**
          * Use DnD item
          * @param key - item key
@@ -645,11 +649,11 @@ export const useDnD: TUseDnD = (transition = {}, css = {}) => {
         useDnD.stylesheet = stylesheet;
     }
     return {
-        observe: (callback: EventListenerOrEventListenerObject, element: HTMLElement = doc?.body) => {
+        observe: (callback: TDnDCallback, element: HTMLElement = doc?.body) => {
             element && observe(element, callback);
             return () => element && unobserve(element, callback);
         },
-        unobserve: (element: HTMLElement, callback: EventListenerOrEventListenerObject) => unobserve(element, callback),
+        unobserve: (callback: TDnDCallback, element: HTMLElement = doc?.body) => unobserve(element, callback),
         item: (key: string) => attrObj(ATTRS.item, key),
         target: (key: string, group: string = '') => attrObj(ATTRS.target, `${group ? group + '-' : ''}${key}`),
         scope: (key = '') => attrObj(ATTRS.scope, key),
