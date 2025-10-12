@@ -1,6 +1,6 @@
 <p align="center">
-  <a href="https://effdnd.surge.sh">
-    <img alt="effdnd" src="https://effnd.tech/effdnd_logo.svg" height="256px" />
+  <a href="https://effnd.tech/dnd/">
+    <img alt="effdnd" src="https://effnd.tech/dnd/logo.svg" height="256px" />
   </a>
 </p>
 
