@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'vitest';
-import { useDnD } from './index';
+import { ITriggerElement, useDnD } from './index';
 import { userEvent } from '@vitest/browser/context';
 
 const GROUP = 'group';
@@ -7,44 +7,42 @@ const SCOPE = 'local';
 
 describe('UseDnD:', () => {
     let stats = [];
-    let trigger1: HTMLElement;
-    let trigger2: HTMLElement;
-    let trigger3: HTMLElement;
+    let trigger1: ITriggerElement;
+    let trigger2: ITriggerElement;
+    let trigger3: ITriggerElement;
     beforeAll(() => {
-        const { item, scope, target, observe} = useDnD({
-            dur: 0,
-            del: 0
-        });
-        const firstTarget = target('1', GROUP);
-        const secondTarget = target('2', GROUP);
-        const thirdTarget = target('3');
-        const fourthTarget = target('4');
-        const firstItem = item('1');
-        const secondItem = item('2');
-        const thirdItem = item('3');
-        const localScope = scope(SCOPE);
+        const { observe} = useDnD();
         window.document.body.innerHTML = `
-            <div id="scope-1" ${localScope}>
-                <div id="targets-wrapper">
-                    <div id="target-1" class="target" ${firstTarget}></div>
-                    <div id="target-2" class="target" ${secondTarget}></div>
-                    <div id="target-3" class="target" ${thirdTarget}></div>
+            <effdnd-actor id="scope-1" scope="${SCOPE}">
+                <div class="targets-wrapper">
+                    <effdnd-actor id="target-1" class="target" target="${GROUP}-1"></effdnd-actor>
+                    <effdnd-actor id="target-2" class="target" target="${GROUP}-2"></effdnd-actor>
+                    <effdnd-actor id="target-3" class="target" target="3"></effdnd-actor>
                 </div>
-                <div id="items-wrapper">
-                    <div id="item-1" class="item" ${firstItem}>
-                        <effdnd-trigger id="trigger-1" class="trigger"></effdnd-trigger>
-                    </div>
-                    <div id="item-2" class="item" ${secondItem}>
-                        <effdnd-trigger id="trigger-2" scope="${SCOPE}" class="trigger"></effdnd-trigger>
-                    </div>
-                    <div id="item-3" class="item" ${thirdItem}>
-                        <effdnd-trigger id="trigger-3" target="${GROUP}" scope="${SCOPE}" class="trigger"></effdnd-trigger>
-                    </div>
+                <div class="items-wrapper">
+                    <effdnd-actor id="item-1" class="item" item="1">
+                        <effdnd-trigger id="trigger-1" scope="#" class="trigger" dur="0"></effdnd-trigger>
+                    </effdnd-actor>
+                    <effdnd-actor id="item-2" class="item" item="2">
+                        <effdnd-trigger id="trigger-2" scope="${SCOPE}" class="trigger" dur="0"></effdnd-trigger>
+                    </effdnd-actor>
+                    <effdnd-actor id="item-3" class="item" item="3">
+                        <effdnd-trigger id="trigger-3" target="${GROUP}" scope class="trigger" dur="0"></effdnd-trigger>
+                    </effdnd-actor>
+                    <effdnd-actor id="item-4" class="item" item="3">
+                        <effdnd-trigger id="trigger-4" target="${GROUP}-1" class="trigger" dur="0"></effdnd-trigger>
+                    </effdnd-actor>
                 </div>
-            </div>
-            <div id="scope-2">
-                <div id="target-4" class="target" ${fourthTarget}></div>
-            </div>
+            </effdnd-actor>
+            <effdnd-actor id="scope-2">
+                <div class="targets-wrapper">
+                    <effdnd-actor id="target-4" target="4" class="target"></effdnd-actor>
+                    <effdnd-actor id="target-cont-5" target="5" contents>
+                        <div class="target-contents"></div>
+                    </effdnd-actor>
+                </div>
+                <div class="items-wrapper"></div>
+            </effdnd-actor>
             <style>
                 #scope-1 {
                     width:400px;
@@ -56,15 +54,18 @@ describe('UseDnD:', () => {
                     width:400px;
                     height:200px;
                     display:flex;
+                    flex-direction:column;
                     background: #574c4c;
                 }
-                #targets-wrapper, #items-wrapper {
+                .targets-wrapper, .items-wrapper {
                     flex-basis: 40%;
+                    flex-grow: 0;
+                    flex-shrink: 0;
                     display: flex;
                     flex-direction: column;
                     padding: 10px;
                 }
-                .target {
+                .target, .target-contents {
                     width: 100%;
                     height: 20px;
                     background: white;
@@ -92,9 +93,9 @@ describe('UseDnD:', () => {
         const unobserve = observe((event) => {
             stats.push(event);
         });
-        trigger1 = document.getElementById('trigger-1');
-        trigger2 = document.getElementById('trigger-2')
-        trigger3 = document.getElementById('trigger-3')
+        trigger1 = document.getElementById('trigger-1') as ITriggerElement;
+        trigger2 = document.getElementById('trigger-2') as ITriggerElement;
+        trigger3 = document.getElementById('trigger-3') as ITriggerElement;
         return () => {
             unobserve();
             stats = [];
@@ -119,12 +120,12 @@ describe('UseDnD:', () => {
 
         test('trigger.dndTargets (default):', async () => {
             const targets = trigger1?.dndTargets;
-            expect(targets).toEqual(new Set(document.querySelectorAll('.target')));
+            expect(targets).toEqual(new Set(document.querySelectorAll('.target,#target-cont-5')));
         });
 
         test('trigger.dndTargets (scoped):', async () => {
             const targets = trigger2?.dndTargets;
-            expect(targets).toEqual(new Set(document.getElementById('targets-wrapper')?.children));
+            expect(targets).toEqual(new Set(document.querySelector('.targets-wrapper')?.children));
         });
 
         test('trigger.dndTargets (scoped group):', async () => {
@@ -135,20 +136,22 @@ describe('UseDnD:', () => {
 
     describe('drag and drop:', () => {
         test('simple', async () => {
-            const target = document.getElementById('target-3');
+            const target = document.getElementById('target-3') as Element;
             await userEvent.dragAndDrop(trigger1, target);
             const targetRect = target.getBoundingClientRect();
             const triggerRect = trigger1.getBoundingClientRect();
+            const xOffset = -190;
+            const yOffset = 60;
             expect(
-                triggerRect.bottom <= targetRect.bottom &&
-                triggerRect.top >= targetRect.top &&
-                triggerRect.right <= targetRect.right &&
-                triggerRect.left >= targetRect.left
+                triggerRect.bottom + xOffset <= targetRect.bottom &&
+                triggerRect.top + yOffset >= targetRect.top &&
+                triggerRect.right + xOffset <= targetRect.right &&
+                triggerRect.left + yOffset >= targetRect.left
             ).toBeTruthy();
         });
 
         test('scope constraints', async () => {
-            const target = document.getElementById('target-4');
+            const target = document.getElementById('target-4') as Element;;
             await userEvent.dragAndDrop(trigger2, target);
             const scopeRect = trigger2.dndScope.getBoundingClientRect();
             const triggerRect = trigger2.getBoundingClientRect();
@@ -161,13 +164,20 @@ describe('UseDnD:', () => {
         });
 
         test('reset', async () => {
-            const target = document.getElementById('target-1');
+            const target = document.getElementById('target-1') as Element;
             await userEvent.dragAndDrop(trigger3, target);
-            trigger3.resetDnD();
+            await trigger3.resetDnD();
             expect(
                 trigger3.dndX === 0 &&
                 trigger3.dndY === 0
             ).toBeTruthy();
+        });
+    });
+
+    describe('style:', () => {
+        test('contents', async () => {
+            const target = document.getElementById('target-cont-5');
+            expect(target && getComputedStyle(target).display).toEqual('contents');
         });
     });
 });

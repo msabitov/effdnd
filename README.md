@@ -51,54 +51,50 @@ yarn add effdnd
 
 ## Quick start
 
-In short, scope is used to limit the area of DnD, target is used as the destination of DnD, item is the element that is being moved. Custom element `effdnd-trigger` will start DnD for closest item. It can be configured via `effdnd-trigger` attributes (see `ITriggerAttrs` interface for details).
+In short, `effdnd` uses two custom web component:
+- `effdnd trigger` is triggerring drag-and-drop,
+- `effdnd-actor` indicates the areas of the layout that will participate in the drag-and-drop process (play their roles).
 
-Just call `useDnD` function to define `effdnd-trigger` and use its result to create special data-attributes:
+The web component `effdnd-actor` can "play" several roles:
+
+- `item` - the item being moved.,
+- `target` - the target of the move,
+- `scope` - movement boundaries.
+
+To define both web components, simply call the `useDnD` function, and use the results of the call to create an event listeners
 
 ```jsx
 import { useDnD } from 'effdnd';
 
-const { scope, item, target, css } = useDnD();
-// create scope attrs
-const scopeAttrs = scope('local');
-// create target attrs
-const fisrtTargetAttrs = target('first');
-// targets can be grouped
-const secondTargetAttrs = target('second', 'group');
-// create item attrs
-const fisrtItemAttrs = item('first');
-const secondItemAttrs = item('second');
-// you can even set up separate styles for different DnD elements
-const separateStyleAttrs = css({
-    passiveTarget: 'border: 4px solid grey',
-});
+// you can pass style parameters to useDnD,
+// to override the movement parameters
+// (for more information, see the type `TUseDnD`)
+const { observe } = useDnD();
 
 export const Component = () => {
     const ref = useRef();
     useEffect(() => {
-      // you can observe DnD events
+      // you can subscribe to Drag-and-Drop events
       const unobserve = observe((e) => {
-        // DnD event reaction
+        // the event is being processed here
       }, ref.current);
-      // and you can unobserve
+      // and you can unsubscribe
       return () => unobserve();
-    }, []);
-    // just apply ready attrs - and magic happen
-    // don't forget to use `<effdnd-trigger>` inside items
-    return <div {...scopeAttrs}>
-        <div>
-            <div {...fisrtTargetAttrs}>...</div>
-            <div {...secondTargetAttrs} {...separateStyleAttrs}>...</div>
+    });
+    return <effdnd-actor scope='top' ref={ref} >
+        <div className="targets-wrapper">
+            <effdnd-actor target='target-1'>...</effdnd-actor>
+            <effdnd-actor target='target-2'>...</effdnd-actor>
         </div>
-        <div>
-            <div {...fisrtItemAttrs}>
+        <div id="items-wrapper">
+            <effdnd-actor item='item-1'>
                 <effdnd-trigger>Trigger #1</effdnd-trigger>
-            </div>
-            <div {...secondItemAttrs}>
+            </effdnd-actor>
+            <effdnd-actor item='item-2'>
                 <effdnd-trigger>Trigger #2</effdnd-trigger>
-            </div>
+            </effdnd-actor>
         </div>
-    </div>;
+    </effdnd-actor>;
 }
 ```
 
