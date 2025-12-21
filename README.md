@@ -8,8 +8,11 @@
 
 <div align="center">
 
-[![license](https://badgen.net/static/license/Apache%202.0/blue)](https://gitverse.ru/msabitov/effdnd/content/master/LICENSE)
+[![license](https://badgen.net/static/license/Apache%202.0/blue)](https://sourcecraft.dev/msabitov/effdnd/browse/LICENSE?rev=master)
 [![npm latest package](https://badgen.net/npm/v/effdnd)](https://www.npmjs.com/package/effdnd)
+![minified size](https://badgen.net/bundlephobia/min/effdnd)
+![minzipped size](https://badgen.net/bundlephobia/minzip/effdnd)
+![install size](https://badgen.net/packagephobia/install/effdnd)
 
 </div>
 
@@ -26,8 +29,9 @@ EffDnD is a self-confident Drag and Drop library based only on the browser APIs.
 ## Links
 
 -   [Docs](https://effnd.tech/dnd/)
--   [Repository](https://gitverse.ru/msabitov/effdnd)
--   [Github mirror](https://github.com/msabitov/effdnd)
+-   [SourceCraft](https://sourcecraft.dev/msabitov/effdnd)
+-   [GitVerse](https://gitverse.ru/msabitov/effdnd)
+-   [GitHub](https://github.com/msabitov/effdnd)
 
 ## Examples
 

@@ -1,6 +1,6 @@
 {
   "name": "effdnd",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Self-confident Drag and Drop",
   "type": "module",
   "scripts": {
@@ -44,7 +44,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://gitverse.ru/msabitov/effdnd"
+    "url": "https://sourcecraft.dev/msabitov/effdnd"
   },
   "homepage": "https://effnd.tech/dnd/"
 }

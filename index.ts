@@ -81,6 +81,10 @@ export interface ITriggerAttrs {
      * Item opacity in active state
      */
     opacity?: string;
+    /**
+     * Use item clone while dragging
+     */
+    clone?: boolean;
 }
 /**
  * DnD trigger element 
@@ -116,10 +120,11 @@ type TDnDElement = HTMLElement | null | undefined;
 
 export type TRefs = {
     trigger: ITriggerElement;
-    item:  TDnDElement,
-    scope: TDnDElement,
-    target: TDnDElement,
-    areas: Set<HTMLElement>
+    item:  TDnDElement;
+    clone: TDnDElement;
+    scope: TDnDElement;
+    target: TDnDElement;
+    areas: Set<HTMLElement>;
 };
 
 export type TKeys = {
@@ -173,10 +178,20 @@ const REMOVE_ATTR = REMOVE + ATTR as 'removeAttribute';
 const NAME = 'name';
 const DIS_BLOCK = 'display:block;';
 const STATE = 'state';
+const PX = 'px';
+const AUTO = 'auto';
+const NONE = 'none';
+const FORWARDS = 'forwards';
+const ITEM = 'item';
+const TARGET = 'target';
+const SCOPE = 'scope';
 const HOST = ':host';
 const ACTIVE = 'active';
 const PASSIVE = 'passive';
 const TARGET_SELECTOR = ACTOR_TAG + `[target]`;
+const STATE_ACTIVE = `[${STATE}=${ACTIVE}]`;
+const STATE_PASSIVE = `[${STATE}=${PASSIVE}]`;
+
 /**
  * DnD event types
  */
@@ -212,6 +227,7 @@ const unobserve = (element: HTMLElement, callback: TDnDCallback) => element[REM_
 const observe = (element: HTMLElement, callback: TDnDCallback) => element[ADD_EL](EVENT_NAME, callback as unknown as EventListenerOrEventListenerObject);
 
 // attribute handlers
+const setCloned = (elements: TDnDElement[]) => elements?.forEach((e) => e?.[SET_ATTR](STATE, 'cloned'));
 const setActive = (elements: TDnDElement[]) => elements?.forEach((e) => e?.[SET_ATTR](STATE, ACTIVE));
 const removeState = (elements: TDnDElement[]) => elements?.forEach((e) => e?.[REMOVE_ATTR](STATE));
 const setPassive = (elements: TDnDElement[] | Element[]) => elements?.forEach((e) => e?.[SET_ATTR](STATE, PASSIVE));
@@ -233,13 +249,16 @@ const PASSIVE_SCOPE_CSS = propVal('outline', rem(0.25) + ' dashed ' + color());
 const ACTIVE_SCOPE_CSS = PASSIVE_SCOPE_CSS + propVal('filter', 'grayscale(100%)');
 const PASSIVE_TARGET_CSS = DIS_BLOCK + propVal('box-shadow', space(color(), ZERO, rem(1.25), rem(2), ZERO, ',', color(3), ZERO, rem(1), rem(0.75), ZERO));
 const ACTIVE_TARGET_CSS = PASSIVE_TARGET_CSS + propVal('outline', rem(0.25) + ' dashed ' + color());
+const notUnstyled = (role: string) => `:not([unstyled=''],[unstyled=${role}])`;
+const square = (str: string) => `[${str}]`;
 const ACTOR_CSS = [
-    `:host{${DIS_BLOCK}}`,
-    `:host([contents]){display:contents;}`,
-    `:host([scope][state=passive]:not([unstyled=''],[unstyled=scope])){${PASSIVE_SCOPE_CSS}}`,
-    `:host([scope][state=active]:not([unstyled=''],[unstyled=scope])){${ACTIVE_SCOPE_CSS}}`,
-    `:host([target][state=passive]:not([unstyled=''],[unstyled=target])){${PASSIVE_TARGET_CSS}}`,
-    `:host([target][state=active]:not([unstyled=''],[unstyled=target])){${ACTIVE_TARGET_CSS}}`,
+    HOST + `{${DIS_BLOCK}}`,
+    HOST + `([contents]){display:contents;}`,
+    HOST + `(${square(ITEM) + '[state=cloned]' + notUnstyled(ITEM)}){filter:grayscale(100%);}`,
+    HOST + `(${square(SCOPE) + STATE_PASSIVE + notUnstyled(SCOPE)}){${PASSIVE_SCOPE_CSS}}`,
+    HOST + `(${square(SCOPE) + STATE_ACTIVE + notUnstyled(SCOPE)}){${ACTIVE_SCOPE_CSS}}`,
+    HOST + `(${square(TARGET) + STATE_PASSIVE + notUnstyled(TARGET)}){${PASSIVE_TARGET_CSS}}`,
+    HOST + `(${square(TARGET) + STATE_ACTIVE + notUnstyled(TARGET)}){${ACTIVE_TARGET_CSS}}`,
 ].join('');
 const TRIGGER_CSS = rule(HOST, DIS_BLOCK + propVal(CURSOR, GRAB));
 const getXY = (elem: HTMLElement) => {
@@ -264,6 +283,7 @@ const subscribe = (trigger: ITriggerElement, defs: {
 
     const refs: TRefs = {
         trigger,
+        clone: null,
         item: null,
         scope: null,
         target: null,
@@ -299,18 +319,20 @@ const subscribe = (trigger: ITriggerElement, defs: {
     const attrs: {
         axis: string | null;
         dist: number | null;
+        clone: string | null
     } = {
         axis: null,
-        dist: null
+        dist: null,
+        clone: null
     };
 
     let initialStyle = {
-        zIndex: 'auto',
+        zIndex: AUTO,
         opacity: '1',
-        pointerEvents: 'auto',
-        touchAction: 'auto'
+        pointerEvents: AUTO,
+        touchAction: AUTO
     };
-    let initCursor = 'auto';
+    let initCursor = AUTO;
 
     const reset = (event: TouchEvent | MouseEvent) => {
         removeState([refs.scope, refs.item, ...refs.areas.keys()]);
@@ -388,12 +410,12 @@ const subscribe = (trigger: ITriggerElement, defs: {
             if (scopeRect.left <= eventX && scopeRect?.right >= eventX && scopeRect.top <= eventY && scopeRect?.bottom >= eventY) setPassive([refs.scope]);
             else setActive([refs.scope]);
         }
-        const animation = refs.item.animate(
+        const animation = (refs.clone || refs.item).animate(
             {
-                translate: space(xval + 'px', yval + 'px'),
+                translate: space(xval + PX, yval + PX),
             },
             {
-                fill: 'forwards',
+                fill: FORWARDS,
                 duration,
                 delay,
                 easing
@@ -416,7 +438,7 @@ const subscribe = (trigger: ITriggerElement, defs: {
     const onDragEnd = async (event: MouseEvent | TouchEvent) => {
         event[PREV_DEF]?.();
         event[STOP_PROP]();
-        if (initCursor === 'auto') refs.scope?.style.removeProperty(CURSOR);
+        if (initCursor === AUTO) refs.scope?.style.removeProperty(CURSOR);
         else refs.scope?.style.setProperty(CURSOR, initCursor);
         if (refs.target) {
             dispatch(refs.target, {
@@ -438,16 +460,17 @@ const subscribe = (trigger: ITriggerElement, defs: {
             keys,
             event
         });
-        const animation = refs.item?.animate(
+        const animation = (refs.clone || refs.item)?.animate(
             initialStyle,
             {
-                fill: 'forwards',
+                fill: FORWARDS,
                 duration: 0,
                 delay: 0
             },
         );
         await animation?.finished;
         animation?.commitStyles();
+        if (refs.clone) document.body.removeChild(refs.clone);
         reset(event);
     };
 
@@ -470,14 +493,14 @@ const subscribe = (trigger: ITriggerElement, defs: {
         }
         attrs.axis = resolveAttr('axis');
         attrs.dist = Number(resolveAttr('dist'));
-
+        attrs.clone = resolveAttr('clone')
         refs.item = resolveItem();
         if (!refs.item) return;
         refs.scope = resolveScope();
         refs.areas = resolveAreas();
-        keys.item = refs.item?.getAttribute('item') || '';
-        keys.scope = refs.scope?.getAttribute('scope') || '';
-        keys.areas = new Set(refs.areas?.keys().map(area => area.getAttribute('target') || ''));
+        keys.item = refs.item?.getAttribute(ITEM) || '';
+        keys.scope = refs.scope?.getAttribute(SCOPE) || '';
+        keys.areas = new Set(refs.areas?.keys().map(area => area.getAttribute(TARGET) || ''));
         
         event[PREV_DEF]?.();
         event[STOP_PROP]();
@@ -487,15 +510,25 @@ const subscribe = (trigger: ITriggerElement, defs: {
         const itemRect = refs.item[GET_RECT]();
         const computedStyle = getComputedStyle(refs.item);
         initialStyle = {
-            zIndex: computedStyle.zIndex || 'auto',
+            zIndex: computedStyle.zIndex || AUTO,
             opacity: computedStyle.opacity || '1',
-            pointerEvents: computedStyle.pointerEvents || 'auto',
-            touchAction: computedStyle.touchAction || 'auto',
+            pointerEvents: computedStyle.pointerEvents || AUTO,
+            touchAction: computedStyle.touchAction || AUTO,
         };
         const translate = getXY(refs.item);
         const currentOffsetX = translate.x;
         const currentOffsetY = translate.y;
-
+        if (attrs.clone !== null) {
+            const clone = refs.item.cloneNode(true) as HTMLElement;
+            clone.style.position = 'fixed';
+            clone.style.top = itemRect.top + PX;
+            clone.style.left = itemRect.left + PX;
+            clone.style.height = (itemRect.bottom - itemRect.top) + PX;
+            clone.style.width = (itemRect.right - itemRect.left) + PX;
+            clone.style.margin = 0 + PX;
+            document.body.appendChild(clone);
+            refs.clone = clone;
+        }
         const minOffsetY = scopeRect.top - (itemRect.top - currentOffsetY);
         const maxOffsetY = scopeRect.bottom - (itemRect.bottom - currentOffsetY);
         const minOffsetX = scopeRect.left - (itemRect.left - currentOffsetX);
@@ -516,19 +549,20 @@ const subscribe = (trigger: ITriggerElement, defs: {
         delay = Number(trigger.getAttribute(DEL)) || defs.del;
         easing = trigger.getAttribute(TF) || defs.tf;
 
-        setActive([refs.item]);
+        setActive([refs.clone || refs.item]);
+        if (refs.clone) setCloned([refs.item]);
         setPassive([refs.scope, ...refs.areas]);
         const zIndex = trigger.getAttribute(ZI) || defs.zi;
         const opacity = trigger.getAttribute(OPACITY) || defs.opacity;
-        const animation = refs.item?.animate(
+        const animation = (refs.clone || refs.item)?.animate(
             {
                 zIndex,
                 opacity,
-                pointerEvents: 'none',
-                touchEvents: 'none'
+                pointerEvents: NONE,
+                touchEvents: NONE
             },
             {
-                fill: 'forwards',
+                fill: FORWARDS,
                 duration: 0,
                 delay: 0
             },
@@ -604,9 +638,9 @@ export const useDnD: TUseDnD = (defs = {}) => {
     if (custom && !custom?.get(TRIGGER_TAG)) {
         custom.define(TRIGGER_TAG, class Trigger extends HTMLElement  {
             get dndItem(): HTMLElement {
-                const itemName = this[GET_ATTR]('item');
+                const itemName = this[GET_ATTR](ITEM);
                 if (itemName === '#') return this;
-                return this.closest(ACTOR_TAG + attrExp('item', itemName || '')) || this;
+                return this.closest(ACTOR_TAG + attrExp(ITEM, itemName || '')) || this;
             }
 
             get dndX(): number {
@@ -618,14 +652,14 @@ export const useDnD: TUseDnD = (defs = {}) => {
             }
 
             get dndScope(): HTMLElement {
-                const scopeName = this[GET_ATTR]('scope');
+                const scopeName = this[GET_ATTR](SCOPE);
                 if (scopeName === '#') return document.body;
-                return this.closest(ACTOR_TAG + attrExp('scope', scopeName || '')) || document.body;
+                return this.closest(ACTOR_TAG + attrExp(SCOPE, scopeName || '')) || document.body;
             }
 
             get dndTargets(): Set<HTMLElement> {
-                const targetName = this[GET_ATTR]('target');
-                return new Set(this.dndScope.querySelectorAll(ACTOR_TAG + (targetName ? `[target^="${targetName}"]` : `[target]`)));
+                const targetName = this[GET_ATTR](TARGET);
+                return new Set(this.dndScope.querySelectorAll(ACTOR_TAG + (targetName ? `[${TARGET}^="${targetName}"]` : square(TARGET))));
             }
 
             /**
@@ -635,7 +669,7 @@ export const useDnD: TUseDnD = (defs = {}) => {
                 const animation = this.dndItem.animate({
                     translate: '0'
                 }, {
-                    fill: 'forwards',
+                    fill: FORWARDS,
                     duration: 0,
                     delay: 0,
                     ...params
