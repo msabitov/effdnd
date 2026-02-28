@@ -1,6 +1,6 @@
 {
   "name": "effdnd",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Self-confident Drag and Drop",
   "type": "module",
   "scripts": {
@@ -9,6 +9,8 @@
   },
   "keywords": [
     "drag and drop",
+    "reorder",
+    "transfer",
     "dnd",
     "web components",
     "ui",
@@ -21,6 +23,10 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./use": {
+      "import": "./dist/use.js",
+      "require": "./dist/use.js"
     }
   },
   "author": "Marat Sabitov",

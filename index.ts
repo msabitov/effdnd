@@ -26,6 +26,30 @@ export interface IActorAttrs {
      * Display contents
      */
     contents?: boolean;
+    /**
+     * Item mode
+     */
+    'item-mode'?: 'keep' | 'clone';
+    /**
+     * Target mode
+     */
+    'target-mode'?: 'append' | 'prepend' | 'remove';
+    /**
+     * Scope mode
+     */
+    'scope-mode'?: 'order-x' | 'order-y';
+    /**
+     * Scope transition duration
+     */
+    'scope-dur'?: number;
+    /**
+     * Scope transition delay
+     */
+    'scope-del'?: number;
+    /**
+     * Scope transition timing-function
+     */
+    'scope-tf'?: string;
 }
 /**
  * DnD trigger attributes
@@ -73,23 +97,15 @@ export interface ITriggerAttrs {
      * Transition timing-function
      */
     tf?: string;
-    /**
-     * Item z-index in active state
-     */
-    zi?: string;
-    /**
-     * Item opacity in active state
-     */
-    opacity?: string;
-    /**
-     * Use item clone while dragging
-     */
-    clone?: boolean;
 }
 /**
  * DnD trigger element 
  */
 export interface ITriggerElement extends HTMLElement {
+    /**
+     * Is trigger active
+     */
+    isActive: boolean;
     /**
      * DnD item y-offset
      */
@@ -111,14 +127,16 @@ export interface ITriggerElement extends HTMLElement {
      */
     dndTargets: Set<HTMLElement>;
     /**
-     * Reset DnD transforms
+     * Reset DnD translate
      */
-    resetDnD(options?: KeyframeAnimationOptions): Promise<void>;
+    resetDnD(): void;
 }
 
 type TDnDElement = HTMLElement | null | undefined;
 
 export type TRefs = {
+    index: number;
+    nextIndex: number;
     trigger: ITriggerElement;
     item:  TDnDElement;
     clone: TDnDElement;
@@ -146,7 +164,6 @@ const DUR = 'dur';
 const DEL = 'del';
 const TF = 'tf';
 const OPACITY = 'opacity';
-const ZI = 'zi';
 const ZERO = '0px';
 const MOUSE = 'mouse';
 const MOVE = 'move';
@@ -181,16 +198,23 @@ const STATE = 'state';
 const PX = 'px';
 const AUTO = 'auto';
 const NONE = 'none';
-const FORWARDS = 'forwards';
 const ITEM = 'item';
 const TARGET = 'target';
 const SCOPE = 'scope';
+const SCOPE_DEL = SCOPE + '-' + DEL;
+const SCOPE_DUR = SCOPE + '-' + DUR;
+const SCOPE_TF = SCOPE + '-' + TF;
 const HOST = ':host';
 const ACTIVE = 'active';
 const PASSIVE = 'passive';
 const TARGET_SELECTOR = ACTOR_TAG + `[target]`;
 const STATE_ACTIVE = `[${STATE}=${ACTIVE}]`;
 const STATE_PASSIVE = `[${STATE}=${PASSIVE}]`;
+
+type TReorderItem = {
+    elem: HTMLElement;
+    rect: DOMRect;
+};
 
 /**
  * DnD event types
@@ -201,7 +225,9 @@ export const EVENT_TYPE = {
     DPE: 'dropenter',
     DG: 'drag',
     DGE: 'dragend',
-    DGS: 'dragstart'
+    DGS: 'dragstart',
+    ORD: 'order',
+    TF: 'transfer'
 } as const;
 
 export type TEventType = typeof EVENT_TYPE[keyof typeof EVENT_TYPE];
@@ -236,7 +262,7 @@ const attrExp = (attr: string, val?: string | number | null) => `[${attr}${val ?
 const propVal = (prop: string, val: string) => prop + ':' + val + ';';
 const rule = (selector: string, content: string) => selector + `{${content}}`;
 const color = (div = 2) => `oklch(from currentColor l c h / calc(alpha / ${div}))`;
-const rem = (val: number) => val  + 'rem';
+const rem = (val: number | string) => val  + 'rem';
 const getTargetByXY = (x: number, y: number): TDnDElement => document.elementFromPoint(x, y)?.closest(TARGET_SELECTOR);
 const defineShadowRoot = (element: HTMLElement, css: string) => {
     const shadowRoot = element.shadowRoot || element.attachShadow({ mode: 'open' });
@@ -245,22 +271,32 @@ const defineShadowRoot = (element: HTMLElement, css: string) => {
     stylesheet.replaceSync(css);
     shadowRoot.adoptedStyleSheets = [stylesheet];
 };
-const PASSIVE_SCOPE_CSS = propVal('outline', rem(0.25) + ' dashed ' + color());
-const ACTIVE_SCOPE_CSS = PASSIVE_SCOPE_CSS + propVal('filter', 'grayscale(100%)');
-const PASSIVE_TARGET_CSS = DIS_BLOCK + propVal('box-shadow', space(color(), ZERO, rem(1.25), rem(2), ZERO, ',', color(3), ZERO, rem(1), rem(0.75), ZERO));
-const ACTIVE_TARGET_CSS = PASSIVE_TARGET_CSS + propVal('outline', rem(0.25) + ' dashed ' + color());
+const BASE_SIZE = '0.2';
+const PASSIVE_SCOPE_CSS = propVal('box-shadow', space(ZERO, ZERO, rem(1), ZERO, color()));
+const ACTIVE_SCOPE_CSS = PASSIVE_SCOPE_CSS + propVal(OPACITY, '0.5');
+const PASSIVE_TARGET_CSS = propVal('outline', rem(BASE_SIZE) + ' dashed ' + color());
+const ACTIVE_TARGET_CSS = propVal('outline', rem(BASE_SIZE) + ' solid ' + color());
 const notUnstyled = (role: string) => `:not([unstyled=''],[unstyled=${role}])`;
 const square = (str: string) => `[${str}]`;
 const ACTOR_CSS = [
-    HOST + `{${DIS_BLOCK}}`,
+    HOST + `{${DIS_BLOCK}position:relative;}`,
     HOST + `([contents]){display:contents;}`,
-    HOST + `(${square(ITEM) + '[state=cloned]' + notUnstyled(ITEM)}){filter:grayscale(100%);}`,
+    HOST + `(${square(ITEM) + STATE_ACTIVE + notUnstyled(ITEM)}){${propVal(OPACITY, '0.75')};${propVal('z-index', '1000')}}`,
+    HOST + `(${square(ITEM) + '[state=cloned]' + notUnstyled(ITEM)}){${propVal(OPACITY, BASE_SIZE)};}`,
     HOST + `(${square(SCOPE) + STATE_PASSIVE + notUnstyled(SCOPE)}){${PASSIVE_SCOPE_CSS}}`,
     HOST + `(${square(SCOPE) + STATE_ACTIVE + notUnstyled(SCOPE)}){${ACTIVE_SCOPE_CSS}}`,
     HOST + `(${square(TARGET) + STATE_PASSIVE + notUnstyled(TARGET)}){${PASSIVE_TARGET_CSS}}`,
     HOST + `(${square(TARGET) + STATE_ACTIVE + notUnstyled(TARGET)}){${ACTIVE_TARGET_CSS}}`,
 ].join('');
-const TRIGGER_CSS = rule(HOST, DIS_BLOCK + propVal(CURSOR, GRAB));
+
+const fullIcon = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20100%20100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20style%3D%22fill%3AcurrentColor%3Bmax-width%3A1em%3Bmax-height%3A1em%3B%22%3E%0D%0A%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2237.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2262.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2237.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2262.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3C%2Fsvg%3E'
+const yIcon = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20100%20100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20style%3D%22fill%3AcurrentColor%3Bmax-width%3A1em%3Bmax-height%3A1em%3B%22%3E%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3C%2Fsvg%3E';
+const xIcon = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20100%20100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20style%3D%22fill%3AcurrentColor%3Bmax-width%3A1em%3Bmax-height%3A1em%3B%22%3E%3Ccircle%20cy%3D%2237.5%22%20cx%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2237.5%22%20cx%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2237.5%22%20cx%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2262.5%22%20cx%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2262.5%22%20cx%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2262.5%22%20cx%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3C%2Fsvg%3E';
+
+const TRIGGER_CSS = rule(HOST, DIS_BLOCK + propVal(CURSOR, GRAB)) +
+    `:host(:empty)::after{width:1.5em;display:block;height:1.5em;content:url(${fullIcon});}` +
+    `:host([axis=x]:empty){content: url(${xIcon});}` +
+    `:host([axis=y]:empty){content: url(${yIcon});}`;
 const getXY = (elem: HTMLElement) => {
     const translate = elem.style.translate.split(' ');
     return {
@@ -269,19 +305,30 @@ const getXY = (elem: HTMLElement) => {
     };
 };
 
-const subscribe = (trigger: ITriggerElement, defs: {
-    dur: number;
-    del: number;
-    tf: string;
-    zi: number;
-    opacity: number;
-}) => {
+const DEF_INI = {
+    marginLeft: 0,
+    marginRight: 0,
+    marginTop: 0,
+    marginBottom: 0,
+    width: 0,
+    height: 0
+};
+
+const DEF_TRANSITION = {
+    dur: 100,
+    del: 0,
+    tf: 'linear'
+};
+
+const getSubscribe = () => (trigger: ITriggerElement) => {
     const resolveItem = () => trigger.dndItem;
     const resolveScope =  () => trigger.dndScope;
     const resolveAreas = () => new Set(trigger.dndTargets);
     const resolveAttr = (name: string) => trigger[GET_ATTR](name);
 
     const refs: TRefs = {
+        index: -1,
+        nextIndex: -1,
         trigger,
         clone: null,
         item: null,
@@ -312,31 +359,36 @@ const subscribe = (trigger: ITriggerElement, defs: {
         min: number;
     } | undefined;
 
-    let duration: number = defs.dur;
-    let delay: number = defs.del;
-    let easing: string = defs.tf;
+    let duration: number = DEF_TRANSITION.dur;
+    let delay: number = DEF_TRANSITION.del;
+    let easing: string = DEF_TRANSITION.tf;
+    let scopemode: 'order-x' | 'order-y' | null;
+    const reorderRefs: {
+        prev: TReorderItem[];
+        next: TReorderItem[];
+    } = {
+        prev: [],
+        next: []
+    };
 
     const attrs: {
         axis: string | null;
         dist: number | null;
-        clone: string | null
+        clone: boolean;
     } = {
         axis: null,
         dist: null,
-        clone: null
+        clone: false
     };
 
-    let initialStyle = {
-        zIndex: AUTO,
-        opacity: '1',
-        pointerEvents: AUTO,
-        touchAction: AUTO
-    };
+    let initialStyle = DEF_INI;
     let initCursor = AUTO;
 
     const reset = (event: TouchEvent | MouseEvent) => {
         removeState([refs.scope, refs.item, ...refs.areas.keys()]);
 
+        if (refs.clone) refs.clone.remove();
+        refs.clone = null;
         refs.item = null;
         refs.target = null;
         refs.scope = null;
@@ -350,7 +402,12 @@ const subscribe = (trigger: ITriggerElement, defs: {
         scopeRect = null;
         x = undefined;
         y = undefined;
+        reorderRefs.prev = [];
+        reorderRefs.next = [];
+        initialStyle = DEF_INI;
+
         const remove = document[REM_EL];
+        trigger.isActive = false;
         if (event.type === TOUCH_END) {
             remove(TOUCH_MOVE, onDrag);
             remove(TOUCH_END, onDragEnd);
@@ -364,9 +421,10 @@ const subscribe = (trigger: ITriggerElement, defs: {
      * Drag callback
      * @param event
      */
-    const onDrag = async (event: TouchEvent | MouseEvent) => {
-        if (!refs.item) return;
-
+    const onDrag = (event: TouchEvent | MouseEvent) => {
+        if (!refs.item || !x || !y) return;
+        event[PREV_DEF]?.();
+        event[STOP_PROP]();
         let eventY: number;
         let eventX: number;
         if (event.type === TOUCH_MOVE) {
@@ -380,25 +438,77 @@ const subscribe = (trigger: ITriggerElement, defs: {
         event[PREV_DEF]();
         if (x && y && attrs.dist && (Math.abs(x.ini - eventX) < attrs.dist) && (Math.abs(y.ini - eventY) < attrs.dist)) return;
 
-        const targetByXY = getTargetByXY(eventX, eventY);
-        const nextTarget = refs.areas.has(targetByXY as HTMLElement) ? targetByXY : null;
-        if (nextTarget !== refs.target) {
-            setPassive([refs.target]);
-            dispatch(refs.target, {
-                type: EVENT_TYPE.DPL,
-                refs,
-                keys,
-                event
-            });
-            if (nextTarget && refs.areas.has(nextTarget)) setActive([nextTarget]);
-            refs.target = nextTarget;
-            keys.target = refs.target?.getAttribute(NAME) || '';
-            dispatch(refs.target, {
-                type: EVENT_TYPE.DPE,
-                refs,
-                keys,
-                event
-            });
+        if (!scopemode) {
+            const targetByXY = getTargetByXY(eventX, eventY);
+            const nextTarget = refs.areas.has(targetByXY as HTMLElement) ? targetByXY : null;
+            if (nextTarget !== refs.target) {
+                setPassive([refs.target]);
+                dispatch(refs.target, {
+                    type: EVENT_TYPE.DPL,
+                    refs,
+                    keys,
+                    event
+                });
+                if (nextTarget && refs.areas.has(nextTarget)) setActive([nextTarget]);
+                refs.target = nextTarget;
+                keys.target = refs.target?.getAttribute(NAME) || '';
+                dispatch(refs.target, {
+                    type: EVENT_TYPE.DPE,
+                    refs,
+                    keys,
+                    event
+                });
+            }
+        } else {
+            let targetIndex = refs.index;
+            if (attrs.axis === 'x') {
+                const offset = initialStyle.width + initialStyle.marginLeft + initialStyle.marginRight;
+                if (eventX > x.ini) {
+                    reorderRefs.next.forEach(({elem, rect}, ind) => {
+                        if (eventX > rect.left) {
+                            targetIndex = refs.index + 1 + ind;
+                            elem.style.translate = `-${offset}px 0px `;
+                        } else elem.style.translate = `0px`;
+                    });
+                    reorderRefs.prev.forEach(({elem}) => {
+                        elem.style.translate = `0px`;
+                    })
+                } else {
+                    reorderRefs.next.forEach(({elem}) => {
+                        elem.style.translate = `0px`;
+                    });
+                    reorderRefs.prev.forEach(({elem, rect}, ind) => {
+                        if (eventX < rect.right) {
+                            targetIndex = refs.index - (1 + ind);
+                            elem.style.translate = `${offset}px 0px`;
+                        } else elem.style.translate = `0px`;
+                    })
+                }
+            } else {
+                const offset = initialStyle.height + initialStyle.marginTop + initialStyle.marginBottom;
+                if (eventY > y.ini) {
+                    reorderRefs.next.forEach(({elem, rect}, ind) => {
+                        if (eventY > rect.top) {
+                            targetIndex = refs.index + 1 + ind;
+                            elem.style.translate = `0px -${offset}px`;
+                        } else elem.style.translate = `0px`;
+                    });
+                    reorderRefs.prev.forEach(({elem}) => {
+                        elem.style.translate = `0px`;
+                    })
+                } else {
+                    reorderRefs.next.forEach(({elem}) => {
+                        elem.style.translate = `0px`;
+                    });
+                    reorderRefs.prev.forEach(({elem, rect}, ind) => {
+                        if (eventY < rect.bottom) {
+                            targetIndex = refs.index - (1 + ind);
+                            elem.style.translate = `0px ${offset}px`;
+                        } else elem.style.translate = `0px`;
+                    })
+                }
+            }
+            refs.nextIndex = targetIndex;
         }
 
         let xval = 0;
@@ -410,19 +520,10 @@ const subscribe = (trigger: ITriggerElement, defs: {
             if (scopeRect.left <= eventX && scopeRect?.right >= eventX && scopeRect.top <= eventY && scopeRect?.bottom >= eventY) setPassive([refs.scope]);
             else setActive([refs.scope]);
         }
-        const animation = (refs.clone || refs.item).animate(
-            {
-                translate: space(xval + PX, yval + PX),
-            },
-            {
-                fill: FORWARDS,
-                duration,
-                delay,
-                easing
-            },
-        );
-        await animation?.finished;
-        animation?.commitStyles();
+        const animated = (refs.clone || refs.item);
+        globalThis.requestAnimationFrame(() => {
+            animated.style.translate = space(xval + PX, yval + PX);
+        });
         dispatch(refs.item, {
             type: EVENT_TYPE.DG,
             refs,
@@ -435,11 +536,49 @@ const subscribe = (trigger: ITriggerElement, defs: {
      * Drag end callback
      * @param event
      */
-    const onDragEnd = async (event: MouseEvent | TouchEvent) => {
+    const onDragEnd = (event: MouseEvent | TouchEvent) => {
         event[PREV_DEF]?.();
         event[STOP_PROP]();
         if (initCursor === AUTO) refs.scope?.style.removeProperty(CURSOR);
         else refs.scope?.style.setProperty(CURSOR, initCursor);
+
+        if (scopemode && refs.item) {
+            const item = refs.item;
+            item.style.transition = '';
+            item.style.pointerEvents = '';
+            item.style.touchAction = '';
+            globalThis.requestAnimationFrame(() => {
+                item.style.translate = '';
+            });
+            const reorderIndex = refs.nextIndex;
+            if (refs.scope && typeof reorderIndex === 'number' && reorderIndex !== refs.index) {
+                if (reorderIndex < refs.index) refs.scope.children[reorderIndex].insertAdjacentElement('beforebegin', refs.item);
+                else refs.scope.children[reorderIndex].insertAdjacentElement('afterend', refs.item);
+            }
+            reorderRefs.prev.forEach(({elem}) => {
+                elem.style.translate = '';
+                elem.style.transition = '';
+            });
+            reorderRefs.next.forEach(({elem}) => {
+                elem.style.translate = '';
+                elem.style.transition = '';
+            });
+            dispatch(refs.scope, {
+                type: EVENT_TYPE.ORD,
+                refs,
+                keys,
+                event
+            });
+            dispatch(refs.item, {
+                type: EVENT_TYPE.DGE,
+                refs,
+                keys,
+                event
+            });
+            reset(event);
+            return;
+        }
+
         if (refs.target) {
             dispatch(refs.target, {
                 type: EVENT_TYPE.DP,
@@ -460,17 +599,26 @@ const subscribe = (trigger: ITriggerElement, defs: {
             keys,
             event
         });
-        const animation = (refs.clone || refs.item)?.animate(
-            initialStyle,
-            {
-                fill: FORWARDS,
-                duration: 0,
-                delay: 0
-            },
-        );
-        await animation?.finished;
-        animation?.commitStyles();
-        if (refs.clone) document.body.removeChild(refs.clone);
+        const item = (refs.clone || refs.item);
+        if (!item) return;
+        item.style.pointerEvents = '';
+        item.style.touchAction = '';
+        item.style.transition = '';
+        if (item.getAttribute('item-mode') !== 'keep') globalThis.requestAnimationFrame(() => {
+            item.style.translate = '';
+        });
+        const targetaction = refs.target?.getAttribute('target-mode')
+        if (targetaction && refs.item && !refs.target?.contains(refs.item)) {
+            if (targetaction === 'prepend') refs.target?.prepend(refs.item);
+            else if (targetaction === 'remove') refs.item.remove();
+            else refs.target?.append(refs.item);
+            dispatch(refs.target, {
+                type: EVENT_TYPE.TF,
+                refs,
+                keys,
+                event
+            });
+        }
         reset(event);
     };
 
@@ -478,8 +626,9 @@ const subscribe = (trigger: ITriggerElement, defs: {
      * Drag start handler
      * @param event
      */
-    const onDragStart = async (event: MouseEvent | TouchEvent) => {
-        if (!event.target || !trigger.contains(event.target as Node)) return;
+    const onDragStart = (event: MouseEvent | TouchEvent) => {
+        if (trigger.isActive || !event.target || !trigger.contains(event.target as Node)) return;
+        
         // start position
         let startX
         let startY;
@@ -493,10 +642,30 @@ const subscribe = (trigger: ITriggerElement, defs: {
         }
         attrs.axis = resolveAttr('axis');
         attrs.dist = Number(resolveAttr('dist'));
-        attrs.clone = resolveAttr('clone')
+        
         refs.item = resolveItem();
         if (!refs.item) return;
+        attrs.clone = refs.item.getAttribute('item-mode') === 'clone';
         refs.scope = resolveScope();
+        duration = +(trigger.getAttribute(DUR) || refs.scope.getAttribute(SCOPE_DUR) || DEF_TRANSITION.dur);
+        delay = +(trigger.getAttribute(DEL) || refs.scope.getAttribute(SCOPE_DEL) || DEF_TRANSITION.del);
+        easing = trigger.getAttribute(TF) || refs.scope.getAttribute(SCOPE_TF) || DEF_TRANSITION.tf;
+        const transition = `translate ${duration}ms ${easing} ${delay}ms`;
+        const items = [...refs.scope.children] as HTMLElement[];
+        refs.index = items.indexOf(refs.item);
+        refs.nextIndex = refs.index;
+        scopemode = refs.scope ? (refs.scope.getAttribute('scope-mode') as 'order-x' | 'order-y') : null;
+        if (scopemode) {
+            attrs.axis = scopemode === 'order-x' ? 'x' : 'y';
+            reorderRefs.prev = items.slice(0, refs.index).toReversed().map((elem) => {
+                elem.style.transition = transition;
+                return {elem, rect: elem.getBoundingClientRect()};
+            });
+            reorderRefs.next = items.slice(refs.index + 1).map((elem) => {
+                elem.style.transition = transition;
+                return {elem, rect: elem.getBoundingClientRect()};
+            });
+        }
         refs.areas = resolveAreas();
         keys.item = refs.item?.getAttribute(ITEM) || '';
         keys.scope = refs.scope?.getAttribute(SCOPE) || '';
@@ -510,15 +679,17 @@ const subscribe = (trigger: ITriggerElement, defs: {
         const itemRect = refs.item[GET_RECT]();
         const computedStyle = getComputedStyle(refs.item);
         initialStyle = {
-            zIndex: computedStyle.zIndex || AUTO,
-            opacity: computedStyle.opacity || '1',
-            pointerEvents: computedStyle.pointerEvents || AUTO,
-            touchAction: computedStyle.touchAction || AUTO,
+            marginLeft: Number.parseInt(computedStyle.marginLeft),
+            marginRight: Number.parseInt(computedStyle.marginRight),
+            marginTop: Number.parseInt(computedStyle.marginTop),
+            marginBottom: Number.parseInt(computedStyle.marginBottom),
+            width: itemRect.width,
+            height: itemRect.height
         };
         const translate = getXY(refs.item);
         const currentOffsetX = translate.x;
         const currentOffsetY = translate.y;
-        if (attrs.clone !== null) {
+        if (attrs.clone && !scopemode) {
             const clone = refs.item.cloneNode(true) as HTMLElement;
             clone.style.position = 'fixed';
             clone.style.top = itemRect.top + PX;
@@ -526,9 +697,13 @@ const subscribe = (trigger: ITriggerElement, defs: {
             clone.style.height = (itemRect.bottom - itemRect.top) + PX;
             clone.style.width = (itemRect.right - itemRect.left) + PX;
             clone.style.margin = 0 + PX;
-            document.body.appendChild(clone);
+            refs.item.parentElement?.appendChild(clone);
             refs.clone = clone;
         }
+
+        if (refs.clone) refs.clone.style.transition = transition;
+        else refs.item.style.transition = transition;
+
         const minOffsetY = scopeRect.top - (itemRect.top - currentOffsetY);
         const maxOffsetY = scopeRect.bottom - (itemRect.bottom - currentOffsetY);
         const minOffsetX = scopeRect.left - (itemRect.left - currentOffsetX);
@@ -545,30 +720,14 @@ const subscribe = (trigger: ITriggerElement, defs: {
             max: maxOffsetY,
             min: minOffsetY
         };
-        duration = Number(trigger.getAttribute(DUR)) || defs.dur;
-        delay = Number(trigger.getAttribute(DEL)) || defs.del;
-        easing = trigger.getAttribute(TF) || defs.tf;
-
+        trigger.isActive = true;
         setActive([refs.clone || refs.item]);
         if (refs.clone) setCloned([refs.item]);
         setPassive([refs.scope, ...refs.areas]);
-        const zIndex = trigger.getAttribute(ZI) || defs.zi;
-        const opacity = trigger.getAttribute(OPACITY) || defs.opacity;
-        const animation = (refs.clone || refs.item)?.animate(
-            {
-                zIndex,
-                opacity,
-                pointerEvents: NONE,
-                touchEvents: NONE
-            },
-            {
-                fill: FORWARDS,
-                duration: 0,
-                delay: 0
-            },
-        );
-        await animation?.finished;
-        animation?.commitStyles();
+        const animated = (refs.clone || refs.item);
+        animated.style.pointerEvents = NONE + '';
+        animated.style.touchAction = NONE + '';
+        animated.style.transition = `translate ${duration}ms ${easing} ${delay}ms`;
         const docListen = document[ADD_EL];
         if (event.type === TOUCH_START) {
             docListen(TOUCH_MOVE, onDrag, {[PASSIVE]: false});
@@ -592,28 +751,7 @@ const subscribe = (trigger: ITriggerElement, defs: {
     };
 };
 
-export type TUseDnD = (defs?: Partial<{
-    /**
-     * Duration
-     */
-    dur: number;
-    /**
-     * Delay
-     */
-    del: number;
-    /**
-     * Transition-timing-function
-     */
-    tf: string;
-    /**
-     * Active DnD item z-index
-     */
-    zi: number;
-    /**
-     * Active DnD item opacity
-     */
-    opacity: number;
-}>) => {
+export type TUseDnD = () => {
     /**
      * Observe DnD events
      * @param callback - event handler
@@ -631,12 +769,13 @@ export type TUseDnD = (defs?: Partial<{
 /**
  * Define drag and drop provider custom element
  */
-export const useDnD: TUseDnD = (defs = {}) => {
-    const {dur = 100, del = 0, tf = 'linear', zi = 1000, opacity = 0.5} = defs;
+export const useDnD: TUseDnD = () => {
     const custom = globalThis.customElements;
     const doc = globalThis.document;
     if (custom && !custom?.get(TRIGGER_TAG)) {
         custom.define(TRIGGER_TAG, class Trigger extends HTMLElement  {
+            isActive: boolean = false;
+
             get dndItem(): HTMLElement {
                 const itemName = this[GET_ATTR](ITEM);
                 if (itemName === '#') return this;
@@ -658,31 +797,26 @@ export const useDnD: TUseDnD = (defs = {}) => {
             }
 
             get dndTargets(): Set<HTMLElement> {
+                if (this.dndScope.getAttribute('scope-mode') !== null) return new Set();
                 const targetName = this[GET_ATTR](TARGET);
-                return new Set(this.dndScope.querySelectorAll(ACTOR_TAG + (targetName ? `[${TARGET}^="${targetName}"]` : square(TARGET))));
+                return new Set([
+                    ...this.dndScope.querySelectorAll<HTMLElement>(ACTOR_TAG + (targetName ? `[${TARGET}^="${targetName}"]` : square(TARGET)))
+                ].filter((elem) => !elem.contains(this)));
             }
 
             /**
              * Reset translate effects
              */
-            async resetDnD(params = {}) {
-                const animation = this.dndItem.animate({
-                    translate: '0'
-                }, {
-                    fill: FORWARDS,
-                    duration: 0,
-                    delay: 0,
-                    ...params
-                });
-                await animation?.finished;
-                animation?.commitStyles();
+            resetDnD() {
+                if (this.dndItem) this.dndItem.style.translate = '';
             }
 
             disconnectedCallback: () => void;
 
             connectedCallback() {
                 defineShadowRoot(this, TRIGGER_CSS);
-                const unsubscribe = subscribe(this, {dur, del, tf, zi, opacity});
+                const subscribe = getSubscribe();
+                const unsubscribe = subscribe(this);
                 this.disconnectedCallback = () => unsubscribe();
             }
         });

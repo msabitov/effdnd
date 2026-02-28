@@ -65,14 +65,11 @@ The web component `effdnd-actor` can "play" several roles:
 - `target` - the target of the move,
 - `scope` - movement boundaries.
 
-To define both web components, simply call the `useDnD` function, and use the results of the call to create an event listeners
+To define both web components, simply call the `useDnD` function, and use the results of the call to create event listeners
 
 ```jsx
 import { useDnD } from 'effdnd';
 
-// you can pass style parameters to useDnD,
-// to override the movement parameters
-// (for more information, see the type `TUseDnD`)
 const { observe } = useDnD();
 
 export const Component = () => {

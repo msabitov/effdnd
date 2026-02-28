@@ -36,5 +36,13 @@ export default [
             }),
             tsPlugin
         ]
+    }, {
+        input: {
+            use: 'use.ts',
+        },
+        output,
+        plugins: [
+            tsPlugin
+        ]
     }
 ];
