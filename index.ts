@@ -76,6 +76,12 @@ export interface ITriggerAttrs {
      */
     dist?: string;
     /**
+     * Triggering mouse button
+     * @description
+     * Any mouse button if not specified
+     */
+    btn?: '0' | '1' | '2';
+    /**
      * DnD axis
      */
     axis?: string;
@@ -160,6 +166,7 @@ const space = (...params: (string | number)[]) => params.join(' ');
 const EVENT_NAME = 'effdnd';
 export const TRIGGER_TAG = EVENT_NAME + '-trigger';
 export const ACTOR_TAG = EVENT_NAME + '-actor';
+const BTN = 'btn';
 const DUR = 'dur';
 const DEL = 'del';
 const TF = 'tf';
@@ -289,9 +296,17 @@ const ACTOR_CSS = [
     HOST + `(${square(TARGET) + STATE_ACTIVE + notUnstyled(TARGET)}){${ACTIVE_TARGET_CSS}}`,
 ].join('');
 
-const fullIcon = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20100%20100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20style%3D%22fill%3AcurrentColor%3Bmax-width%3A1em%3Bmax-height%3A1em%3B%22%3E%0D%0A%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2237.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2262.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2237.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2262.5%22%20r%3D%229.5%22%2F%3E%0D%0A%3C%2Fsvg%3E'
-const yIcon = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20100%20100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20style%3D%22fill%3AcurrentColor%3Bmax-width%3A1em%3Bmax-height%3A1em%3B%22%3E%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2237.5%22%20cy%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cx%3D%2262.5%22%20cy%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3C%2Fsvg%3E';
-const xIcon = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20100%20100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20style%3D%22fill%3AcurrentColor%3Bmax-width%3A1em%3Bmax-height%3A1em%3B%22%3E%3Ccircle%20cy%3D%2237.5%22%20cx%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2237.5%22%20cx%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2237.5%22%20cx%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2262.5%22%20cx%3D%2225%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2262.5%22%20cx%3D%2250%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3Ccircle%20cy%3D%2262.5%22%20cx%3D%2275%22%20r%3D%229.5%22%3E%3C%2Fcircle%3E%3C%2Fsvg%3E';
+const svg = (val: string) => 'data:image/svg+xml,' + globalThis.encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="fill:currentColor;max-width:1em;max-height:1em;">${val}</svg>`);
+const circle = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="9.5"/>`;
+const circleX = (val: number) => circle(val, 37.5) + circle(val, 62.5);
+const circleY = (val: number) => circle(37.5, val) + circle(62.5, val);
+const svgContent = (axis = 'x') => {
+    const fn = axis === 'x' ? circleX : circleY; 
+    return svg([25,50,75].reduce((acc, i) => acc + fn(i), ''));
+};
+const fullIcon = svg(circleX(37.5) + circleX(62.5))
+const yIcon = svgContent('y');
+const xIcon = svgContent();
 
 const TRIGGER_CSS = rule(HOST, DIS_BLOCK + propVal(CURSOR, GRAB)) +
     `:host(:empty)::after{width:1.5em;display:block;height:1.5em;content:url(${fullIcon});}` +
@@ -637,6 +652,9 @@ const getSubscribe = () => (trigger: ITriggerElement) => {
             startX = touch.clientX;
             startY = touch.clientY;
         } else {
+            const eventBtn = (event as MouseEvent).button;
+            const mouseBtn = trigger.getAttribute(BTN);
+            if (mouseBtn && eventBtn !== +mouseBtn) return;
             startX = (event as MouseEvent).clientX;
             startY = (event as MouseEvent).clientY;
         }
@@ -773,6 +791,7 @@ export const useDnD: TUseDnD = () => {
     const custom = globalThis.customElements;
     const doc = globalThis.document;
     if (custom && !custom?.get(TRIGGER_TAG)) {
+
         custom.define(TRIGGER_TAG, class Trigger extends HTMLElement  {
             isActive: boolean = false;
 

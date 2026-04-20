@@ -42,7 +42,7 @@ describe('UseDnD:', () => {
                         <effdnd-trigger id="trigger-4" target="${GROUP}-1" class="trigger"></effdnd-trigger>
                     </effdnd-actor>
                     <effdnd-actor id="item-5" class="item" item="5" item-mode="clone">
-                        <effdnd-trigger id="trigger-5" target="${GROUP}-1" class="trigger" dur="0"></effdnd-trigger>
+                        <effdnd-trigger id="trigger-5" target="${GROUP}-1" class="trigger" dur="0" btn="0"></effdnd-trigger>
                     </effdnd-actor>
                 </div>
             </effdnd-actor>

@@ -16,6 +16,6 @@
         "lib": ["esnext", "DOM", "dom.iterable"],
         "types": ["@vitest/browser/matchers"]
     },
-    "include": ["index.ts"],
+    "include": ["index.ts", "use.ts"],
     "exclude": ["node_modules", "dist"]
 }

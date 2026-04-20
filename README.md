@@ -99,4 +99,26 @@ export const Component = () => {
 }
 ```
 
+If you are using server-side rendering just add script with `effdnd` declaration to your HTML head to keep your layout:
+
+```html
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/effdnd@3.1.0/dist/use.js"></script>
+</head>
+```
+
+This script will also allow you to use `effdnd` as a global variable:
+
+```ts
+import { TUseDnD } from 'effdnd';
+
+declare global {
+    interface Window {
+        effdnd: ReturnType<TUseDnD>;
+    }
+};
+
+const unobserve = window.effdnd.observe(() => console.log('effdnd'));
+```
+
 That's all. Enjoy simplicity.
